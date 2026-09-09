@@ -1,0 +1,33 @@
+<launch>
+  <node pkg="stier"
+        type="rosbag_record_speed"
+        name="rosbag_record_speed"
+        output="screen">
+
+    <!-- 트리거 조건 -->
+    <param name="speed_topic" value="/ublox_position_receiver/navpvt"/>
+    <param name="threshold_kmh" value="5.0"/>
+    <param name="hold_up_s" value="0.1"/>
+
+    <!-- 녹화 시간(초) -->
+    <param name="fixed_duration_s" value="45"/>
+
+    <!-- bag 저장 위치/이름 -->
+    <param name="out_dir" value="$(env HOME)/bags"/>
+    <param name="bag_filename" value="steer-8"/>         <!-- 비워두면 prefix+timestamp -->
+    <param name="prefix" value="tset"/>
+    <param name="use_timestamp" value="false"/>
+
+    <!-- rosbag 옵션 -->
+    <param name="record_all" value="true"/>
+    <param name="split_size_mb" value="0"/>
+    <param name="compress_lz4" value="false"/>
+
+    <!-- rddf 실행 옵션 (추가된 부분) -->
+    <param name="run_rddf" value="true"/>
+    <param name="rddf_cmd" value="rosrun stier rddf"/>
+    <!-- 파일 이름만 바꾸고 싶으면 여기에 값 지정. 비우면 bag 이름과 동일(stem)로 자동 매칭 -->
+    <param name="rddf_outfile" value=""/>         <!-- 예: lap1 -->
+  </node>
+</launch>
+

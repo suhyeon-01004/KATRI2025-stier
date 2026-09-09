@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- RViz config -->
+  <arg name="rviz_config"
+       default="$(find lidar)/lidar/rviz/final.rviz"/>
+
+  <!-- 1. RPLIDAR launch -->
+  <include file="$(find rplidar_ros)/launch/rplidar_s2.launch"/>
+
+  <!-- 2. GPS bringup -->
+  <include file="$(find gps_bringup)/launch/gps.launch"/>
+
+  <!-- 3. STIER pure pursuit -->
+  <include file="$(find stier)/launch/pp.launch"/>
+
+  <!-- 4. Vision pipeline -->
+  <include file="$(find vision_pkg)/launch/vision.launch"/>
+
+  <!-- 5. Object Detector -->
+  <node pkg="object_detector" type="cloud_converter.py" name="cloud_converter"
+        respawn="true"
+        launch-prefix="xterm -hold -e"
+        output="screen"/>
+  <node pkg="object_detector" type="obstacle_detector.py" name="obstacle_detector"
+        respawn="true"
+        launch-prefix="xterm -hold -e"
+        output="screen"/>
+
+  <!-- 6. 기타 노드들 -->
+  <node pkg="rostopic"    type="rostopic" name="navstatus_echo"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"
+        args="echo /ublox_position_receiver/navstatus"/>
+  <node pkg="rddf_recorder" type="rddf_recorder" name="rddf_recorder"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"/>
+  <node pkg="rosserial_python" type="serial_node.py" name="arduino_serial"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"
+        args="/dev/dev_arduino"/>
+  <node pkg="lidar" type="pure_pursuit_lidar.py" name="pp_lidar"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"/>
+  <node pkg="lidar" type="pure_pursuit_tunnel.py" name="pp_tunnel"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"/>
+  <node pkg="mission" type="gps_rrt.py" name="gps_rrt"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"/>
+  <node pkg="vision_pkg" type="tunnel.py" name="tunnel_start"
+        respawn="true" launch-prefix="xterm -hold -e" output="screen"/>
+
+  <!-- 7. RViz -->
+  <node pkg="rviz" type="rviz" name="rviz"
+        respawn="false"
+        launch-prefix="xterm -hold -e"
+        output="screen"
+        args="-d $(arg rviz_config)"/>
+</launch>
+

@@ -1,0 +1,60 @@
+<launch>
+  <!-- 1) GPS 품질 모니터: fixStat==3 && flags2>=72 -->
+  <node pkg="control_pose_bridge" type="gps_quality_monitor.py" name="gps_quality_monitor" output="screen">
+    <param name="req_ok_samples" value="5"/>
+    <param name="req_bad_samples" value="3"/>
+    <param name="flags2_threshold" value="72"/>
+    <param name="fixstat_required" value="3"/>
+    <param name="navstatus_topic" value="/ublox_position_receiver/navstatus"/>
+    <!-- gps_quality_monitor 노드 파라미터(launch) -->
+    <param name="req_ok_samples" value="1"/>
+    <param name="req_bad_samples" value="1"/>
+  </node>
+
+  <!-- 2) ERP42 속도 → Twist -->
+  <node pkg="control_pose_bridge" type="wheel_speed_to_twist.py" name="wheel_speed_to_twist" output="screen"/>
+
+  <!-- 3) EKF(imu + wheel speed) → /odom_dr -->
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_dr" output="screen">
+    <rosparam command="load" file="$(find control_pose_bridge)/config/ekf_dr.yaml" />
+    <remap from="odometry/filtered" to="/odom_dr"/>
+  </node>
+
+  <!-- 4) navsat_transform_node: GPS Fix + DR 참고 → UTM Odometry -->
+  <!-- 이미 UTM Pose를 따로 만들고 있다면 이 블록은 삭제하고 그 결과를 /gps_utm_pose로 remap -->
+  <!-- <node pkg="robot_localization" type="navsat_transform_node" name="navsat_tf" output="screen" respawn="true">
+    <rosparam command="load" file="$(find control_pose_bridge)/config/navsat_tf.yaml" />
+    <remap from="imu/data" to="/imu/data"/>
+    <remap from="gps/fix" to="/ublox_position_receiver/fix"/>
+    <remap from="odometry/filtered" to="/odom_dr"/>
+    <remap from="odometry/gps" to="/gps_utm_odom"/>
+  </node> -->
+
+  <!-- /utm -> /gps_utm_pose remap (bag용) -->
+  <node pkg="topic_tools" type="relay" name="bag_utm_to_pose" args="/utm /gps_utm_pose" />
+
+  <!-- 5) /gps_utm_odom → /gps_utm_pose -->
+  <!-- <node pkg="control_pose_bridge" type="odom_to_pose.py" name="gps_odom_to_pose" output="screen">
+    <param name="in"  value="/gps_utm_odom"/>
+    <param name="out" value="/gps_utm_pose"/>
+  </node> -->
+
+  <!-- 6) 포즈 중재기: /gps_ok에 따라 GPS/DR 자동 전환 → /pose_for_pp -->
+  <node pkg="control_pose_bridge" type="pose_arbiter" name="pose_arbiter" output="screen">
+    <param name="gps_timeout" value="0.5"/>
+    <param name="dr_timeout"  value="0.5"/>
+    <param name="blend_duration" value="0.5"/>
+    <remap from="/gps_utm_pose" to="/utm"/>
+  </node>
+
+  <!-- RDDF 비주얼라이저: RDDF 텍스트 파일 경로를 꼭 맞춰줘 -->
+  <!-- <node pkg="control_pose_bridge" type="rddf_visualizer.py" name="rddf_visualizer" output="screen">
+    <param name="frame_id" value="utm"/>
+    <param name="rddf_path" value="$(find stier)/paths/2025-8-14_12-24.txt"/>
+    <param name="lookahead" value="1.0"/>
+  </node> -->
+
+  <!-- RViz 실행 시 고정 프레임을 viz로 -->
+  <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find control_pose_bridge)/rviz/pp_follow.rviz" /> -->
+
+</launch>

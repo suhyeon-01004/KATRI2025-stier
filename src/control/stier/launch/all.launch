@@ -1,0 +1,76 @@
+<launch>
+  <!-- 1) RPLIDAR 뷰어 (별도 xterm 창) -->
+  <node name="lidar_view"
+        pkg="stier" type="launch_lidar.sh"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+0+0 -e" />
+
+  <!-- 2) GPS bringup (별도 xterm 창) -->
+  <node name="gps_bringup"
+        pkg="stier" type="launch_gps.sh"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+500+0 -e" />
+
+  <!-- 3) Pure Pursuit 런치 (별도 xterm 창) -->
+  <node name="pp_launch"
+        pkg="stier" type="launch_pp.sh"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+1000+0 -e" />
+
+  <!-- 4) Vision 전체 런치 (별도 xterm 창) -->
+  <node name="vision_launch"
+        pkg="stier" type="launch_vision.sh"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+1500+0 -e" />
+
+  <!-- 5) Point-cloud converter -->
+  <node name="cloud_converter"
+        pkg="object_detector" type="cloud_converter.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+0+300 -e" />
+
+  <!-- 6) Obstacle detector -->
+  <node name="obstacle_detector"
+        pkg="object_detector" type="obstacle_detector.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+500+300 -e" />
+
+  <!-- 7) UBlox 상태 확인 -->
+  <node name="pos"
+        pkg="rostopic" type="rostopic"
+        args="echo /ublox_position_receiver/navstatus"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+1000+300 -e" />
+
+  <!-- 8) Arduino serial -->
+  <node name="serial_node"
+        pkg="rosserial_python" type="serial_node.py"
+        args="/dev/dev_arduino"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+1500+300 -e" />
+
+  <!-- 9) Pure pursuit LiDAR -->
+  <node name="pure_pursuit_lidar"
+        pkg="lidar" type="pure_pursuit_lidar.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+0+600 -e" />
+
+  <!-- 10) Pure pursuit tunnel -->
+  <node name="pure_pursuit_tunnel"
+        pkg="lidar" type="pure_pursuit_tunnel.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+500+600 -e" />
+
+  <!-- 11) GPS-RRT mission -->
+  <node name="gps_rrt"
+        pkg="mission" type="gps_rrt.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+1000+600 -e" />
+
+  <!-- 12) Tunnel vision processing -->
+  <node name="tunnel"
+        pkg="vision_pkg" type="tunnel.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -hold -geometry 80x24+1500+600 -e" />
+</launch>
+

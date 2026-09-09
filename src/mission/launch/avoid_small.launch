@@ -1,0 +1,15 @@
+<launch>
+
+<node pkg="rviz" type="rviz" name="rviz" args="-d /home/stier/catkin_ws/src/mission/rviz/avoid_small.rviz" output="screen" />
+
+  <node name="avoid_small" pkg="mission" type="avoid_small.py" output="screen" respawn="true" launch-prefix="xterm -e" args="--section"/> 
+  
+  <node name="object_detector" pkg="object_detector" type="object_detector" output="screen" respawn="true" />
+  
+  <node name="lidar_pp" pkg="lidar" type="pure_pursuit_final.py" output="screen" respawn="true" launch-prefix="xterm -e"/>
+  
+  <node name="pp_test" pkg="stier" type="pp_test" output="screen" respawn="true" launch-prefix="xterm -e" />
+  
+  <node name="detect_lane" pkg="recognition" type="detect_lane.py" output="screen" respawn="true" />
+  
+</launch>

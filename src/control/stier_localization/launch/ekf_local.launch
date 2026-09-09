@@ -1,0 +1,20 @@
+<launch>
+  <!-- 1) IMU 드라이버 (이미 있다면 생략/리맵) -->
+  <!-- <node pkg="your_imu_pkg" type="imu_node" name="imu_node" output="screen"/> -->
+
+  <!-- 2) Wheel Odom 퍼블리셔 (네 encoder 노드) -->
+  <!-- <node pkg="erp42_localization" type="encoder_feedback_odom.py" name="encoder_odom" output="screen"/> -->
+
+  <!-- 3) IMU 링크 정렬 (예: imu가 base_link 위로 0.1m) -->
+  <node pkg="tf" type="static_transform_publisher" name="static_imu_tf"
+        args="0 0 0.1 0 0 0 base_link imu_link 100" />
+
+  <!-- 4) EKF 실행 -->
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_odom" output="screen">
+    <rosparam command="load" file="$(find stier_localization)/config/ekf_odom.yaml" />
+    <!-- 필요 시 토픽 이름 리맵 -->
+    <remap from="odometry/filtered" to="/odometry/local"/>
+    <remap from="imu/data" to="/imu/data"/>
+    <remap from="odometry" to="wheel/odom"/>  <!-- YAML에서 odom0가 'wheel/odom'이면 생략 -->
+  </node>
+</launch>

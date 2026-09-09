@@ -1,0 +1,78 @@
+<launch>
+
+  <!-- 1) RPLIDAR 뷰어 (alias: lidar) -->
+  <node pkg="roslaunch" type="roslaunch" name="lidar"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+0+0 -e"
+        args="rplidar_ros rplidar_s2.launch" />
+
+  <!-- 2) Point-cloud converter (alias: cloud) -->
+  <node name="cloud_converter"
+        pkg="object_detector" type="cloud_converter.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+500+0 -e" />
+
+  <!-- 3) Obstacle detector (alias: obde) -->
+  <node name="obstacle_detector"
+        pkg="object_detector" type="obstacle_detector.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+1000+0 -e" />
+
+  <!-- 4) GPS bringup (alias: gps) -->
+  <node pkg="roslaunch" type="roslaunch" name="gps_bringup"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+0+300 -e"
+        args="gps_bringup gps.launch" />
+
+  <!-- 5) UBlox status echo (alias: pos) -->
+  <node name="pos"
+        pkg="rostopic" type="rostopic"
+        args="echo /ublox_position_receiver/navstatus"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+500+300 -e" />
+
+  <!-- 6) Arduino serial node (alias: arduino_start) -->
+  <node name="serial_node"
+        pkg="rosserial_python" type="serial_node.py"
+        args="/dev/dev_arduino"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+1000+300 -e" />
+
+  <!-- 7) Pure pursuit LiDAR (alias: pp_lidar) -->
+  <node name="pure_pursuit_lidar"
+        pkg="lidar" type="pure_pursuit_lidar.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+0+600 -e" />
+
+  <!-- 8) Pure pursuit tunnel (alias: pp_tunnel) -->
+  <node name="pure_pursuit_tunnel"
+        pkg="lidar" type="pure_pursuit_tunnel.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+500+600 -e" />
+
+  <!-- 9) Pure pursuit 전체 런치 (alias: pp_start) -->
+  <node pkg="roslaunch" type="roslaunch" name="stier_pp"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+1000+600 -e"
+        args="stier pp.launch" />
+
+  <!-- 10) GPS-RRT mission (alias: gps_rrt) -->
+  <node name="gps_rrt"
+        pkg="mission" type="gps_rrt.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+0+900 -e" />
+
+  <!-- 11) Tunnel vision processing (alias: tunnel_start) -->
+  <node name="tunnel"
+        pkg="vision_pkg" type="tunnel.py"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+500+900 -e" />
+
+  <!-- 12) Vision 전체 런치 (alias: vision) -->
+  <node pkg="roslaunch" type="roslaunch" name="vision_pkg"
+        respawn="true" output="screen"
+        launch-prefix="xterm -geometry 80x24+1000+900 -e"
+        args="vision_pkg vision.launch" />
+
+</launch>
+

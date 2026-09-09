@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--FOR TRACK RACING & RECORDING-->
+<launch>
+    
+    <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
+
+    <node pkg="object_detector" type="object_detector" name="object_detector" output="screen"/>
+    <node pkg="tunnel" type="tunnel.py" name="tunnel" output = 'screen'/>
+    <node pkg="tunnel" type="decision_py.py" name="decision" output = 'screen'/>
+    <node pkg="static" type="avoid_pre.py" name="avoid" />
+
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find lidar)/rviz/tunnel.rviz" />
+    <!-- ROSBAG RECORD-->
+    <!--IN STIER-->
+    
+    <node pkg="rosbag" type="record" name="rosbag_record" args="-o /home/stier/catkin_ws/src/lidar/lidar/bag/ /velodyne_points /object_info /goal /local_path /target_point /path_marker /goal_marker /state /target_point"/>
+
+    <node pkg="lidar" type="pure_pursuit.py" name="pp_lidar" />
+
+</launch>

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>stier_localization</name>
+  <version>1.0.0</version>
+  <description>stier2025</description>
+  <maintainer email="min3592@naver.com">mannykim</maintainer>
+  <license>stier</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <depend>roscpp</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>sbg_driver</depend>
+  <depend>eigen</depend>
+  <depend>ublox_msgs</depend>
+  <depend>message_generation</depend>
+  <depend>message_runtime</depend>
+  <depend>imu_filter_madgwick</depend>
+</package>

@@ -1,0 +1,12 @@
+<launch>
+    <!-- 파라미터 설정 -->
+    <param name="rddf" type="string" value="rddf_pg-jeju_reverse.txt" />
+    
+    <param name="ld" type="double" value="1.0" />
+    <param name="speed" type="double" value="20.0" />
+    
+    <param name="section_fix" type="int" value="2" />
+    
+    <!-- rosrun stier pp 실행 -->
+    <node pkg="stier" type="pp" name="pp_node" output="screen" />
+</launch>

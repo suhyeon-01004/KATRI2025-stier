@@ -1,0 +1,8 @@
+<launch>
+    <!-- 파라미터 설정 -->
+    <param name="name" type="string" value="$(arg param_value)" />
+    <param name="resolution" type="double" value="0.1" />
+
+    <!-- rosrun stier pp 실행 -->
+    <node pkg="stier" type="rddf" name="rddf" output="screen" />
+</launch>

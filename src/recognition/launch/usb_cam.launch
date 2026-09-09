@@ -1,0 +1,36 @@
+<launch>
+  <!-- 로지텍 BRIO: usb-0:3 (index0 -> /dev/video4) -->
+  <node name="usb_cam1" pkg="usb_cam" type="usb_cam_node" output="screen" respawn="true" respawn_delay="1.0">
+    <param name="video_device"     value="/dev/v4l/by-path/pci-0000:08:00.3-usb-0:3:1.0-video-index0"/>
+    <param name="image_width"      value="1280"/>
+    <param name="image_height"     value="720"/>
+    <param name="pixel_format"     value="yuyv"/>  <!-- 대역폭 이슈 시 이 카메라만 mjpeg로 바꿔도 OK -->
+    <param name="framerate"        value="30"/>
+    <param name="io_method"        value="mmap"/>
+    <param name="camera_frame_id"  value="usb_cam1"/>
+  </node>
+  
+  <!-- 차선 카메라 (Razer #2): usb-0:4 (index0 -> /dev/video2) -->
+  <node name="usb_cam2" pkg="usb_cam" type="usb_cam_node" output="screen" respawn="true" respawn_delay="1.0">
+    <param name="video_device"     value="/dev/v4l/by-path/pci-0000:08:00.3-usb-0:4:1.0-video-index0"/>
+    <param name="image_width"      value="1280"/>
+    <param name="image_height"     value="720"/>
+    <param name="pixel_format"     value="yuyv"/>
+    <param name="framerate"        value="30"/>
+    <param name="io_method"        value="mmap"/>
+    <param name="camera_frame_id"  value="usb_cam2"/>
+  </node>
+
+  <!-- 신호등 카메라 (Razer #1): usb-0:1 (index0 -> /dev/video0) -->
+  <node name="usb_cam3" pkg="usb_cam" type="usb_cam_node" output="screen" respawn="true" respawn_delay="1.0">
+    <param name="video_device"     value="/dev/v4l/by-path/pci-0000:08:00.3-usb-0:1:1.0-video-index0"/>
+    <param name="image_width"      value="1280"/>
+    <param name="image_height"     value="720"/>
+    <param name="pixel_format"     value="yuyv"/>
+    <param name="framerate"        value="30"/>
+    <param name="io_method"        value="mmap"/>
+    <param name="camera_frame_id"  value="usb_cam3"/>
+  </node>
+
+</launch>
+

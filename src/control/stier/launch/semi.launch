@@ -1,0 +1,23 @@
+<launch>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/stier/catkin_ws/src/control/stier/rviz/semi.rviz" output="screen" />
+  
+  <!-- 컨트롤 -->
+  <node name="pp" pkg="stier" type="pp" output="screen" respawn="true" launch-prefix="xterm -e" /> 
+
+  <!-- 라이다 항상 키는거 -->
+  <node name="object_detector" pkg="object_detector" type="object_detector" output="screen" respawn="true" launch-prefix="xterm -e" />
+
+  <node name="detect_lane" pkg="recognition" type="detect_lane.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+
+  <node name="pure_pursuit_lidar" pkg="lidar" type="pure_pursuit_lidar.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+  
+
+  <!-- 미션 -->
+  <node name="tunnel" pkg="mission" type="tunnel.py" output="screen" respawn="true" args="--section" launch-prefix="xterm -e" />
+  <node name="uturn" pkg="mission" type="uturn.py" output="screen" respawn="true" args="--section" launch-prefix="xterm -e" />
+  <node name="avoid_small" pkg="mission" type="avoid_small.py" output="screen" respawn="true" args="--tunnel" launch-prefix="xterm -e" />
+  <node name="lane_control" pkg="mission" type="lane_control.py" output="screen" respawn="true" args="--section" launch-prefix="xterm -e" />
+  
+  <node name="tollgate" pkg="mission" type="tollgate.py" output="screen" respawn="true" args="--section" launch-prefix="xterm -e" />
+
+</launch>

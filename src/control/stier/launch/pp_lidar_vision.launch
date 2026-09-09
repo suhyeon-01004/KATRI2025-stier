@@ -1,0 +1,13 @@
+<launch>
+    <!-- 파라미터 설정 -->
+    <param name="rddf1" type="string" value="semi_sim_to_real_1.txt" />
+    <param name="rddf2" type="string" value="semi_sim_to_real_2.txt" />
+    <param name="ld" type="double" value="2.0" />
+    <param name="ld_lane_change" type="double" value="4.0" />
+    <param name="speed" type="double" value="10.0" />
+    <param name="section_fix" type="int" value="-1" />
+    
+    <!-- rosrun stier pp 실행 -->
+    <node pkg="stier" type="pp_lidar_vision" name="pp_node" output="screen" respawn="true" launch-prefix="xterm -e" />
+</launch>
+

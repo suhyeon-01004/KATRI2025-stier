@@ -1,0 +1,13 @@
+<launch>
+  <!-- Launch ublox_utils -->
+  <include file="$(find ublox_utils)/launch/ublox.launch">
+    <arg name="device_position_receiver" value="/dev/tty_gps" />
+    <arg name="use_ntrip" value="true" />
+    <arg name="ntrip_username" value="$(optenv NTRIP_USERNAME)" />
+    <arg name="ntrip_password" value="$(optenv NTRIP_PASSWORD)" />
+  </include>
+
+  <!-- Launch utm_lla -->
+  <include file="$(find utm_lla)/launch/coordinate_convertion.launch" />
+</launch>
+

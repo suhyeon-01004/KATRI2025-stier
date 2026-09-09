@@ -1,0 +1,10 @@
+<launch>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/stier/catkin_ws/src/control/stier/rviz/track.rviz" output="screen" />
+ 
+  <node name="object_detector" pkg="object_detector" type="object_detector" output="screen" respawn="true" launch-prefix="xterm -e" />
+
+  <node name="pure_pursuit_track" pkg="lidar" type="pure_pursuit_track.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+  
+  <node name="track_path" pkg="mission" type="track_path.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+
+</launch>

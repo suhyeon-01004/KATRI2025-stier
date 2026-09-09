@@ -1,0 +1,16 @@
+<launch>
+  <!-- UTM (geometry_msgs/PoseStamped)와 NavPVT를 너 환경에 맞게 remap -->
+  <node pkg="stier_localization" type="utm_navpvt_to_odom" name="utm_navpvt_to_odom" output="screen">
+    <param name="world_frame" value="map"/>
+    <param name="child_frame" value="base_link"/>
+    <param name="min_speed" value="0.5"/>
+    <param name="max_yaw_var" value="1000000"/>
+    <param name="min_yaw_var" value="0.0001"/>
+    <param name="pose_var_xy" value="0.0"/>
+    <param name="pose_var_z" value="0.0"/>
+    <param name="zero_altitude" value="true"/>
+    <remap from="utm" to="/utm"/>                           <!-- geometry_msgs/PoseStamped -->
+    <remap from="navpvt" to="/ublox_position_receiver/navpvt"/>  <!-- ublox_msgs/NavPVT -->
+    <remap from="odometry/gps" to="/odometry/gps"/>
+  </node>
+</launch>

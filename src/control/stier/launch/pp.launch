@@ -1,0 +1,26 @@
+<launch>
+    <!-- 파라미터 설정 -->
+    <param name="rddf" type="string" value="2025-10-24_22-32_rddf-hongik-runway_reversed.txt" />
+    <param name="ld" type="double" value="2.0" />
+    <param name="speed" type="double" value="15.0" />
+    <param name="section_fix" type="int" value="1" />
+ 
+    <!-- 추가: 제어 방법 및 Stanley 파라미터 -->
+    <param name="control_method" type="string" value="purepursuit" />
+    <param name="stanley_k" type="double" value="1.2" />
+    <param name="stanley_ks" type="double" value="0.2" />
+    <param name="stanley_heading_gain" type="double" value="1.0" />
+    <param name="stanley_steer_limit_deg" type="double" value="27.0" />
+    
+    <param name="pose_mode" type="string" value="legacy" />
+    
+    <param name="gps_offset_x" type="double" value="0.00" />  <!-- +x 전방(m) -->
+    <param name="gps_offset_y" type="double" value="0.00" />  <!-- +y 좌측(m) -->
+
+    <!-- rosrun stier pp 실행 -->
+    <node pkg="stier" type="pp" name="pp_node" output="screen">
+        <remap from="/utm" to="/utm"/>
+        <remap from="/ublox_position_receiver/navpvt" to="/ublox_position_receiver/navpvt"/>
+    </node>
+</launch>
+

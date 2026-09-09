@@ -1,0 +1,36 @@
+<launch>
+  <node pkg="stier_localization" type="wheel_odom.py" name="wheel_odom" output="screen">
+    <!-- 입력 -->
+    <param name="feedback_topic" value="/erp42_serial/feedback"/>
+
+    <!-- 출력/프레임 -->
+    <param name="pub_topic" value="wheel/odom"/>
+    <param name="frame_odom" value="odom"/>
+    <param name="frame_base" value="base_link"/>
+    <param name="publish_tf" value="true"/>
+
+    <!-- 엔코더 스펙 (실측값으로 교체 권장) -->
+    <param name="pulses_per_rev" value="100"/>
+    <param name="wheel_diameter_m" value="0.54"/>
+    <param name="encoder_modulus" value="65536"/>
+    <param name="encoder_sign" value="1"/>
+
+    <!-- 속도 소스 선택 -->
+    <param name="use_encoder_velocity" value="true"/>
+    <param name="speed_is_kmh" value="true"/>
+
+    <!-- steer→yaw(기본 OFF; IMU/EKF 권장) -->
+    <param name="use_steer_yaw" value="true"/>
+    <param name="wheelbase_m" value="1.04"/>
+    <param name="steer_is_deg" value="true"/>
+    <param name="steer_scale" value="1.0"/>
+    <param name="steer_offset_deg" value="0.0"/>
+    <param name="limit_tan" value="30.0"/>
+
+    <!-- 공분산(상황 맞게 조절) -->
+    <param name="pose_cov_linear" value="0.05"/>
+    <param name="pose_cov_yaw" value="0.2"/>
+    <param name="twist_cov_linear" value="0.5"/>
+    <param name="twist_cov_yaw" value="0.2"/>
+  </node>
+</launch>

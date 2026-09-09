@@ -1,0 +1,892 @@
+//////////////
+// INCLUDES //
+//////////////
+
+#include <iostream>
+#include <sstream>
+#include <fstream>
+#include <string>
+#include <cmath>
+#include <ctime>
+#include <chrono>
+#include <iomanip>
+#include <queue>
+#include <algorithm>
+
+#include <ros/ros.h>
+#include <ros/package.h>
+#include <std_msgs/Int32.h>
+#include <std_msgs/Float32.h>
+#include <std_msgs/Bool.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <ublox_msgs/NavPVT.h>
+#include <erp42_msgs/DriveCmd.h>
+#include <erp42_msgs/ModeCmd.h> 
+#include <erp42_msgs/SerialFeedBack.h>
+
+// NEW: for odometry mode
+#include <nav_msgs/Odometry.h>
+#include <tf/transform_datatypes.h>
+
+
+#include "rddf.h"
+
+/////////////
+// DEFINES //
+/////////////
+
+#define PI_ 3.141592653f
+#define CONTROL_FREQUENCY 16.0f
+#define CONTROL_PERIOD 1.0f/CONTROL_FREQUENCY
+
+#define DEFAULT_SPEED 5.0f
+#define DEFAULT_LD 1.0f
+#define DEFAULT_RDDF "2025-2-11_17-24_rddf-01.txt"
+
+// New: control method defaults
+#define DEFAULT_CONTROL_METHOD "purepursuit"   // "purepursuit" or "stanley"
+#define DEFAULT_STANLEY_K 1.0f                 // lateral error gain
+#define DEFAULT_STANLEY_KS 0.1f                // softening gain to avoid div-by-zero
+#define DEFAULT_STANLEY_HEADING_GAIN 1.0f      // multiplier on heading error term
+#define DEFAULT_STANLEY_STEER_LIMIT_DEG 25.0f  // steering clamp (deg)
+
+
+
+/////////////////////
+// NAMESPACE SETUP //
+/////////////////////
+
+using namespace std;
+
+
+
+///////////////////////
+// ENUMS AND STRUCTS //
+///////////////////////
+
+enum SectionType {
+    STOP = 0,
+    GPS_NAVIGATION = 1,
+    LANE_FOLLOWING = 2,
+    LIDAR_ONLY = 3,
+    TUNNEL = 9,
+    TEST_STEERING = 99
+};
+
+// New: controller selection
+enum ControllerType {
+    CONTROLLER_PURE_PURSUIT = 0,
+    CONTROLLER_STANLEY = 1
+};
+
+// NEW: Pose update mode
+enum PoseUpdateMode {
+    POSE_LEGACY = 0,
+    POSE_ODOMETRY = 1
+};
+
+
+struct CarState {
+    // spec
+    float wheelbase;
+    float wheel_radius;
+    float gps_to_rear;
+    // position
+    double x;
+    double y;
+    float heading;
+    double last_position_update_time;
+    // other states
+    float speed;
+    int idx_current;
+    // cmd
+    int cmd_steer;
+    int cmd_speed;
+    // feedback
+    int feedback_steer;
+    int feedback_speed;
+    // gps
+    float gps_speed;
+};
+
+struct PurePursuitConfig {
+    float lookahead;
+    float speed;
+    float timeahead;
+    float k_ld;
+    float gps_offset_x;
+    float gps_offset_y;
+};
+
+// New: Stanley controller parameters
+struct StanleyConfig {
+    float k;                 // lateral error gain
+    float ks;                // softening term
+    float heading_gain;      // scaling for heading error
+    float steer_limit_deg;   // clamp
+    float gps_offset_x;
+    float gps_offset_y;
+};
+
+
+struct DriveCmd {
+    int steer;
+    int speed;
+};
+
+// //////////////////////
+// GLOBAL VARIABLES //
+// //////////////////////
+
+CarState car;
+Rddf rddf;
+PurePursuitConfig config;
+StanleyConfig stanley_cfg;               // New
+DriveCmd vision_cmd;
+DriveCmd lidar_cmd;
+
+double target_x_log;
+double target_y_log;
+
+ControllerType controller_type = CONTROLLER_PURE_PURSUIT;   // New
+// NEW: global pose mode (set in main from ROS param "pose_mode")
+PoseUpdateMode g_pose_mode = POSE_LEGACY;
+
+///////////////////////
+// LOGGING FUNCTIONS //
+///////////////////////
+
+string getPathOfLogFile() {
+    string ROS_HOME = ros::package::getPath("stier");
+ 
+    time_t now = time(0);
+    tm *ltm = localtime(&now);
+   
+    stringstream ss;
+
+    ss << ROS_HOME << "/log/"
+    << setw(2) << setfill('0') << 1 + ltm->tm_mon
+    << setw(2) << setfill('0') << ltm->tm_mday << "_"
+    << setw(2) << setfill('0') << ltm->tm_hour
+    << setw(2) << setfill('0') << ltm->tm_min << ".txt";
+    
+    return ss.str();
+}
+
+ofstream log_file(getPathOfLogFile());
+
+void startLogging() {
+    if (!log_file) {
+        ROS_WARN("Faile To Write Log File!");
+    }
+    log_file << "no." << "\t";
+    log_file << "car.x" << "\t";
+    log_file << "car.y" << "\t";
+    log_file << "car.heading" << "\t";
+    log_file << "car.cmd_steer" << "\t";
+    log_file << "car.feedback_steer" << "\t";
+    log_file << "target_x" << "\t";
+    log_file << "target_y" << "\t";
+    log_file << endl;
+    log_file.precision(12);
+}
+
+void updateLogging() {
+    static int num = 0;
+    log_file << num << "\t";
+    log_file << car.x << "\t";
+    log_file << car.y << "\t";
+    log_file << car.heading << "\t";
+    log_file << car.cmd_steer << "\t";
+    log_file << car.feedback_steer << "\t";
+    log_file << target_x_log << "\t";
+    log_file << target_y_log << "\t";
+    log_file << endl;
+    num++;
+}
+
+void finishLogging() {
+    log_file.close();
+}
+
+
+///////////////////////
+// CONTROL FUNCTIONS //
+///////////////////////
+
+float wrapToPi(float a){
+    a = std::fmod(a + M_PI, 2.0f*M_PI);
+    if (a < 0) a += 2.0f*M_PI;
+    return a - M_PI;
+}
+
+// NEW: normalize angle to [0, 2π)
+inline float normalize_0_to_2pi(float a){
+    float two_pi = 2.0f * PI_;
+    a = std::fmod(a, two_pi);
+    if (a < 0) a += two_pi;
+    return a;
+}
+
+float adaptive_lookahead()
+{
+     // damping mode
+    float distance_error = rddf.calculateDistancePowFromIdx(car.x, car.y, car.idx_current);
+    static bool damping_mode = false;
+    if (distance_error > 0.5) {
+        damping_mode = true;
+    }
+    float desired_heading = rddf.calculateHeading(car.idx_current);
+
+    static float ld_prev = config.lookahead;
+    // 1) 오차 계산
+    // 헤딩오차 |epsi|
+    const float epsi_abs = std::fabs(wrapToPi(desired_heading - car.heading));
+
+    // 거리오차 |ey|
+    // NOTE:
+    //  - calculateDistancePowFromIdx() 가 "제곱거리"를 반환한다면 sqrt 사용
+    //  - 이미 "거리[m]"면 아래 한 줄을 distance_error 그대로 쓰면 됨
+    float ey_abs = std::sqrt(std::max(0.0f, distance_error));
+    // float ey_abs = std::max(0.0f, distance_error); // <-- distance_error가 이미 [m]이면 이 줄로 교체
+
+    // 2) 속도(m/s)
+    //const float v = std::max(0.0f, kph_current) / 3.6f;
+
+    // 3) 파라미터(튜닝값)
+    const float ld_base = config.lookahead;
+    const float kv   = 0.6f;   // [s]  v 1 m/s 증가 시 Ld 0.6 m 증가
+    const float ky   = 0.8f;   // [m/m]
+    const float kpsi = 1.2f;   // [m/rad]
+    const float Lmin = 1.5f;
+    const float Lmax = 8.0f;
+    const float alpha= 0.2f;   // 0~1, 클수록 빠르게 추종(저역통과 계수)
+
+    // 4) 목표 Ld* 계산 + 클램프
+    float Ld_star = ld_base + ky*ey_abs + kpsi*epsi_abs;
+    Ld_star = std::clamp(Ld_star, Lmin, Lmax);
+
+    float ld_final = (1.0f - alpha)*ld_prev + alpha*Ld_star;
+    ld_prev = ld_final;
+    
+    cout<<" distance_error = "<<distance_error;
+    cout<<" desired_heading = "<<desired_heading;
+    cout<<" car.heading = "<<car.heading;
+    cout<<" ld_final = "<<ld_final<<endl;
+    return ld_final;
+}
+
+
+void calculate_lookahead_point_position(double* x_target, double* y_target, double x, double y) {
+    int idx = rddf.calculateNearestIdx(x, y);
+    int idx_max = rddf.getMaxIdx();
+    
+    float lookahead = config.lookahead;
+    //float lookahead = adaptive_lookahead();
+
+    float lookahead_pow = std::pow(lookahead, 2);
+    while (idx <= idx_max) {
+        double x_p = rddf.getX(idx);
+        double y_p = rddf.getY(idx);
+        if (idx == idx_max) {
+            (*x_target) = x_p;
+            (*y_target) = y_p;
+            return;
+        }
+        double dx = x_p - x;
+        double dy = y_p - y;
+        float dist_pow = std::pow(dx, 2) + std::pow(dy, 2);
+        if (dist_pow < lookahead_pow) {
+            idx ++;
+        }
+        else {
+            break;
+        }
+    }
+    if (idx == 0) {
+        (*x_target) = rddf.getX(0);
+        (*y_target) = rddf.getY(0);
+        return;
+    }
+    if (idx == idx_max) {
+        (*x_target) = 0;
+        (*y_target) = 0;
+        return;
+    }
+    (*x_target) = rddf.getX(idx);
+    (*y_target) = rddf.getY(idx);
+    return;
+}
+
+// New: Stanley steering computation
+float calculate_steer_using_stanley() {
+    // 1) 참조(가장 가까운) 포인트와 그 헤딩 구하기
+    int idx = rddf.calculateNearestIdx(car.x, car.y);
+    double xr = rddf.getX(idx);
+    double yr = rddf.getY(idx);
+    float heading_ref = rddf.calculateHeading(idx); // [rad], rddf 진행 방향
+
+    // 2) 횡방향 오차 e 계산 (좌우 부호 포함, + : 경로의 좌측에 위치)
+    // 경로 좌표계로 변환된 y가 횡오차가 됨
+    double dx = car.x - xr;
+    double dy = car.y - yr;
+    float e = (float)(-dx * std::sin(heading_ref) + dy * std::cos(heading_ref));
+
+    // 3) 헤딩 오차 (경로 헤딩 - 차량 헤딩), [-pi, pi]
+    float theta_e = wrapToPi(heading_ref - car.heading);
+
+    // 4) 차량 속도 [m/s]
+    // car.gps_speed 가 KPH로 쓰이는 경우가 많아 보이므로 보수적으로 m/s 로 변환
+    float v_ms = std::max(0.1f, car.gps_speed / 3.6f);
+
+    // 5) Stanley 조향각 (라디안)
+    // delta = theta_e + atan2(k * e, v + ks)
+    float delta = stanley_cfg.heading_gain * theta_e + std::atan2(stanley_cfg.k * e, v_ms + stanley_cfg.ks);
+
+    // 6) degree로 변환 + 클램프
+    float steer_deg = delta * 180.0f / PI_;
+    steer_deg = std::clamp(steer_deg, -stanley_cfg.steer_limit_deg, stanley_cfg.steer_limit_deg);
+
+    return steer_deg;
+}
+
+float calculate_steer_using_pure_pursuit(double x, double y, float heading) {
+    double current_x = car.x;
+    double current_y = car.y;
+    
+    int cnt = rddf.getCount();
+    int cur_idx = car.idx_current;
+    //cout<<" cur_idx = "<<cur_idx;
+    //cout<<" cog = "<<cog;
+    
+    // 현재 위치 기준 타겟 포인트 찾기
+    double x_target;
+    double y_target;
+    calculate_lookahead_point_position(&x_target, &y_target, x, y);
+    if (x_target == 0 && y_target == 0) {
+        return 0;
+    }
+    float dis = std::sqrt(std::pow(x_target - current_x, 2)+std::pow(y_target - current_y, 2));
+    /*
+    int rangeEnd = std::min(cnt - 1, cur_idx + 50);
+    rangeEnd = std::min(cnt-1, rangeEnd);
+    static int target_idx = 0;
+    float dis;
+    for (int i = cur_idx; i < rangeEnd; i++) {
+        float dist = rddf.calculateDistanceFromIdx(current_x, current_y , i);
+        //cout<<" dist("<<i<<")="<<dist;
+        if (dist > Ld) {
+            target_idx = i;
+            dis = dist;
+            break;
+        }
+    }
+    */
+    //cout<<" target_idx = "<<target_idx;
+    // 현재 위치 기준 조향각 계산
+    double dx = x_target - current_x;
+    double dy = y_target - current_y;
+    float alpha = ((float(atan2(dx,dy))));
+    //cout<<" alpha = "<<alpha;
+    float cog = car.heading;
+    float temp_alpha = (alpha - cog);
+    //cout<<" temp_alpha = "<<temp_alpha;
+    if (cog > PI_ && cog <= 2 * PI_) temp_alpha += 2 * PI_;
+    static float wheelbase = 0.73;
+    float current_steer;
+    current_steer = atan2f(2.0f * wheelbase * sinf(temp_alpha) / (dis), 1.0f);
+    current_steer = current_steer * 180.0f / PI_;
+    current_steer = std::clamp(current_steer, -25.0f, 25.0f);
+    //cout<<" current_steer = "<<current_steer;
+    //cout<<endl;
+    return current_steer;
+}
+
+SectionType get_section_from_rddf_idx(int idx_current) {
+    int max_idx = rddf.getMaxIdx();
+    SectionType section;
+    if (car.idx_current >= max_idx) {
+        section = SectionType::STOP;
+    }
+    else if(car.idx_current >= 21 && car.idx_current <= 54) {
+        section = SectionType::LANE_FOLLOWING;
+    }
+    else {
+        section = SectionType::GPS_NAVIGATION;
+    }
+   return section;
+}
+
+// drive msg updaters
+
+// old pp
+/*
+erp42_msgs::DriveCmd update_drive_cmd_gps_navigation() {
+    erp42_msgs::DriveCmd drive_cmd;
+    // speed control
+    float speed = config.speed;
+    static float speed_temp = 0;
+    static float speed_step = 5 * (1/CONTROL_FREQUENCY);
+    if (speed > speed_temp) {
+        speed_temp = speed_temp + speed_step;
+        
+    }
+    else {
+        speed_temp = speed;
+    }
+    drive_cmd.KPH = (int)speed_temp;
+    // steer control
+    drive_cmd.Deg = calculate_steer_using_pure_pursuit(car.x, car.y, car.heading);
+    return drive_cmd;
+}
+*/
+
+erp42_msgs::DriveCmd update_drive_cmd_gps_navigation() {
+    erp42_msgs::DriveCmd drive_cmd;
+    
+    // steer control
+    // steer control (select between Pure Pursuit and Stanley)
+    float steer_deg = 0.0f;
+    if (controller_type == CONTROLLER_STANLEY) {
+        steer_deg = calculate_steer_using_stanley();
+    } else {
+        steer_deg = calculate_steer_using_pure_pursuit(car.x, car.y, car.heading);
+    }
+    drive_cmd.Deg = -1 * (int)std::lround(steer_deg); // 원본 부호 컨벤션 유지
+
+    // speed control
+    static float speed = config.speed;
+    static float speed_cmd = config.speed;
+    speed_cmd = config.speed;
+    static float speed_step = 1;
+    static int idx_step = 1;
+    static int idx_prev = 0;
+    if (speed_cmd > speed) {
+        // soft start
+        if ((car.idx_current-idx_prev) >= idx_step) {
+            speed = speed + speed_step;
+            idx_prev = car.idx_current;
+        }
+    }
+    else {
+        // instant downspeed
+        speed = speed_cmd;
+    }
+
+    // soft stop
+    int idx_remained = std::max(0, rddf.getMaxIdx() - car.idx_current);
+    float speed_soft_stop = (float)idx_remained * speed_step; // +5 제거, float 유지
+    speed = std::min(speed, speed_soft_stop); // (int) 캐스팅 제거
+    if (idx_remained == 0) {
+        speed = 0.0f;     // 도착 시 완전 정지
+        drive_cmd.brake = 200;
+    }
+    drive_cmd.KPH = speed;
+    return drive_cmd;
+}
+
+///////////////////////////
+// predict next position //
+///////////////////////////
+
+void update_position_with_prediction(double current_x, double current_y, float current_speed, 
+    float current_heading, float current_steer, double dt) {
+
+    // 자전거 모델 파라미터
+    const double wheelbase = car.wheelbase;  // 축거 (L)
+    // 속도를 m/s로 변환
+    double v = current_speed * (1000.0f / 3600.0f);
+    // 조향각을 라디안으로 변환
+    double steer_rad = current_steer * (PI_ / 180.0f) * 2;
+    
+    double new_x, new_y, new_heading;
+
+    current_heading = PI_/2 - current_heading;
+    
+    // 조향각이 0이면 직진 운동
+    if (fabs(steer_rad) < 1e-6) {
+        new_x = current_x + v * dt * cos(current_heading);
+        new_y = current_y + v * dt * sin(current_heading);
+        new_heading = current_heading;
+    } else {
+        // 회전 반경 R 계산
+        double R = wheelbase / tan(steer_rad);
+        double omega = v / R; // 각속도 계산
+        
+        new_x = current_x + R * (sin(current_heading + omega * dt) - sin(current_heading));
+        new_y = current_y - R * (cos(current_heading + omega * dt) - cos(current_heading));
+        new_heading = PI_/2 - (current_heading) + omega * dt;
+    }
+    
+    car.x = new_x;
+    car.y = new_y;
+    car.heading = new_heading;
+    car.last_position_update_time = ros::Time::now().toSec();
+}
+
+////////////////////////
+// CALLBACK FUNCTIONS //
+////////////////////////
+void callback_utm(const geometry_msgs::PoseStamped::ConstPtr& coordinate)
+{
+    /*
+    car.x = coordinate->pose.position.x;
+    car.y = coordinate->pose.position.y;
+    car.last_position_update_time = ros::Time::now().toSec();
+    */
+
+    // 원본 GPS 위치 (후륜 중심)
+    double gps_x = coordinate->pose.position.x;
+    double gps_y = coordinate->pose.position.y;
+
+    // === [추가 부분 시작] ===
+    // 오프셋 파라미터 (필요시 launch에서 param으로 받아도 됨)
+    const double gps_offset_x = config.gps_offset_x;  // 전방 오프셋 [m], 대략 wheelbase 정도
+    const double gps_offset_y = config.gps_offset_y;   // 좌우 오프셋 [m], 센서가 중앙이면 0
+    
+
+    // heading 기준으로 보정
+    
+    float h = car.heading;
+    car.x = gps_x + std::sin(h) * gps_offset_x - std::cos(h) * gps_offset_y;
+    car.y = gps_y + std::cos(h) * gps_offset_x + std::sin(h) * gps_offset_y;
+
+    // === [추가 부분 끝] ===
+
+    car.last_position_update_time = ros::Time::now().toSec();
+}
+
+// Legacy: heading (COG) and gps_speed from ublox NavPVT
+void callback_navpvt(const ublox_msgs::NavPVT::ConstPtr& msg)
+{
+    // gps_speed is useful in both modes, keep updating it
+    car.gps_speed = msg->gSpeed * 0.0036;
+    car.last_position_update_time = ros::Time::now().toSec();
+
+    if (g_pose_mode != POSE_LEGACY) {
+        // In odometry mode we do NOT override heading from COG
+        return;
+    }
+    float cog_deg = msg->heading * 1e-5f;  // degrees
+    float cog_rad = cog_deg * (PI_ / 180.0f);
+    car.heading = normalize_0_to_2pi(cog_rad);
+}
+
+// NEW: Odometry/global callback for position + orientation
+void callback_odometry_global(const nav_msgs::Odometry::ConstPtr& msg)
+{
+    if (g_pose_mode != POSE_ODOMETRY) return; // ensure only active in odometry mode
+
+    // Position
+    car.x = msg->pose.pose.position.x;
+    car.y = msg->pose.pose.position.y;
+
+    // Orientation (quaternion -> yaw in ENU, CCW +, 0 along +X(E))
+    tf::Quaternion q;
+    tf::quaternionMsgToTF(msg->pose.pose.orientation, q);
+    double yaw = tf::getYaw(q); // radians
+
+    // Convert yaw to legacy heading convention (0 = North, CW positive)
+    // heading = PI/2 - yaw, then wrap to [0, 2π)
+    float heading_conv = static_cast<float>(PI_/2 - yaw);
+    car.heading = normalize_0_to_2pi(heading_conv);
+
+    car.last_position_update_time = ros::Time::now().toSec();
+}
+
+void serialFeedback(const erp42_msgs::SerialFeedBack::ConstPtr& feedback_msg){
+    car.feedback_speed = feedback_msg->speed;
+    car.feedback_steer = feedback_msg->steer;
+    double dt = (ros::Time::now().toSec() - car.last_position_update_time);
+    //update_position_with_prediction(car.x, car.y, car.gps_speed, car.heading, car.feedback_steer, dt);
+    /*
+    ROS_INFO("car.last_position_update_time:%12.6f | dt:%12.6f",
+        car.last_position_update_time, dt);
+    */
+    car.last_position_update_time = ros::Time::now().toSec();
+}
+
+void callback_insideDeg(const std_msgs::Float32::ConstPtr& msg)
+{
+    //ROS_INFO("Received insideDeg: %f", msg->data);
+    vision_cmd.steer = msg->data;
+    vision_cmd.speed = 20;
+}
+
+void callback_isLaneDetect(const std_msgs::Bool::ConstPtr& msg)
+{
+    //ROS_INFO("Received islanedetect: %s", msg->data ? "true" : "false");
+    //vision_cmd.steer = 0;
+    vision_cmd.speed = 15;
+}
+
+void missionKPHCallback(const std_msgs::Float32::ConstPtr& msgs){
+    lidar_cmd.speed = static_cast<uint16_t>(msgs->data);
+}
+
+void missionDegCallback(const std_msgs::Float32::ConstPtr& msgs){
+    lidar_cmd.steer = static_cast<uint16_t>(msgs->data);
+}
+
+
+///////////////////
+// MAIN FUNCTION //
+///////////////////
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "pp");
+    ros::NodeHandle nh;
+
+    ros::Subscriber sub_utm;
+    ros::Subscriber gps_sub;
+    ros::Subscriber odom_sub;
+    
+     // Read pose_mode param: "legacy" (default) or "odometry"
+    std::string pose_mode_param = nh.param<std::string>("pose_mode", "legacy");
+    if (pose_mode_param == "odometry") {
+        g_pose_mode = POSE_ODOMETRY;
+    } else {
+        g_pose_mode = POSE_LEGACY;
+    }
+
+    // Set up subscribers according to mode
+    if (g_pose_mode == POSE_LEGACY) {
+        sub_utm   = nh.subscribe("utm", 1, callback_utm);
+        gps_sub   = nh.subscribe("/ublox_position_receiver/navpvt", 1, callback_navpvt);
+        ROS_INFO("Pose mode: LEGACY (using utm + ublox COG for x,y,heading)");
+    } else { // POSE_ODOMETRY
+        odom_sub = nh.subscribe("/odometry/global", 1, callback_odometry_global);
+        // Keep NavPVT for gps_speed only (heading ignored in callback)
+        gps_sub  = nh.subscribe("/ublox_position_receiver/navpvt", 1, callback_navpvt);
+        ROS_INFO("Pose mode: ODOMETRY (using /odometry/global for x,y,heading)");
+    }
+    ros::Subscriber feedback_sub = nh.subscribe("/erp42_serial/feedback", 1, serialFeedback);
+
+    ros::Subscriber sub_insideDeg = nh.subscribe("insideDeg", 10, callback_insideDeg);
+    ros::Subscriber sub_islanedetect = nh.subscribe("islanedetect", 10, callback_isLaneDetect);
+
+    ros::Subscriber lidar_sub1 = nh.subscribe("/missionKPH", 1, missionKPHCallback);
+    ros::Subscriber lidar_sub2 = nh.subscribe("/missionDeg", 1, missionDegCallback);
+
+    ros::Publisher drive_pub = nh.advertise<erp42_msgs::DriveCmd>("/erp42_serial/drive", 1);
+    ros::Publisher section_pub = nh.advertise<std_msgs::Int32>("/section", 1);
+    ros::Publisher speed_pub = nh.advertise<std_msgs::Float32>("/gps_speed", 1); 
+    ros::Publisher current_idx_pub = nh.advertise<std_msgs::Int32>("/current_idx", 1);
+    ros::Publisher mode_pub = nh.advertise<erp42_msgs::ModeCmd>("/erp42_serial/mode", 1);
+
+    ros::Rate loop_rate(CONTROL_FREQUENCY);
+    ROS_INFO("ros node started!");
+
+    car.wheelbase = 0.730;
+    car.wheel_radius = 0.115;
+    car.gps_to_rear = 0.565;
+    car.last_position_update_time = ros::Time::now().toSec();
+
+    int section_fix = -1;
+
+    vision_cmd.steer = 0;
+    vision_cmd.speed = 0;
+
+    lidar_cmd.steer = 0;
+    lidar_cmd.speed = 0;
+
+    // load parameters
+    ROS_INFO("loading parameters..");
+    string rddf_name = nh.param("rddf", (string)DEFAULT_RDDF); 
+    if (nh.hasParam("rddf")) {
+        ROS_INFO("-- rddf : %s", rddf_name.c_str());
+    } else {
+        ROS_WARN("-- rddf(default) : %s", rddf_name.c_str());
+    }
+
+    config.lookahead = nh.param("ld", DEFAULT_LD);
+    if (nh.hasParam("ld")) {
+        ROS_INFO("-- ld : %f", config.lookahead);
+    } else {
+        ROS_WARN("-- ld(default) : %f", config.lookahead);
+    }
+
+    config.speed = nh.param("speed", DEFAULT_SPEED);
+    if (nh.hasParam("speed")) {
+        ROS_INFO("-- speed : %f", config.speed);
+    } else {
+        ROS_WARN("-- speed(default) : %f", config.speed);
+    }
+
+    // New: control method selection and Stanley parameters
+    std::string control_method = nh.param<std::string>("control_method", (std::string)DEFAULT_CONTROL_METHOD);
+    if (control_method == "stanley") {
+        controller_type = CONTROLLER_STANLEY;
+    } else {
+        controller_type = CONTROLLER_PURE_PURSUIT;
+    }
+    ROS_INFO("-- control_method : %s", control_method.c_str());
+
+    stanley_cfg.k = nh.param("stanley_k", (float)DEFAULT_STANLEY_K);
+    stanley_cfg.ks = nh.param("stanley_ks", (float)DEFAULT_STANLEY_KS);
+    stanley_cfg.heading_gain = nh.param("stanley_heading_gain", (float)DEFAULT_STANLEY_HEADING_GAIN);
+    stanley_cfg.steer_limit_deg = nh.param("stanley_steer_limit_deg", (float)DEFAULT_STANLEY_STEER_LIMIT_DEG);
+
+    ROS_INFO("-- stanley_k : %f", stanley_cfg.k);
+    ROS_INFO("-- stanley_ks : %f", stanley_cfg.ks);
+    ROS_INFO("-- stanley_heading_gain : %f", stanley_cfg.heading_gain);
+    ROS_INFO("-- stanley_steer_limit_deg : %f", stanley_cfg.steer_limit_deg);
+
+    
+
+    section_fix = nh.param("section_fix", -1);
+    if (nh.hasParam("section_fix")) {
+        ROS_INFO("-- section_fix : %d", section_fix);
+    } else {
+        ROS_WARN("-- not using section_fix : %d", section_fix);
+    }
+
+    config.gps_offset_x = nh.param("gps_offset_x", 0.0);
+    if (nh.hasParam("gps_offset_x")) {
+        ROS_INFO("-- gps_offset_x : %f", config.gps_offset_x);
+    } else {
+        ROS_WARN("-- gps_offset_x(default) : %f", config.gps_offset_x);
+    }
+
+    config.gps_offset_y = nh.param("gps_offset_y", 0.0);
+    if (nh.hasParam("gps_offset_y")) {
+        ROS_INFO("-- gps_offset_y : %f", config.gps_offset_y);
+    } else {
+        ROS_WARN("-- gps_offset_y(default) : %f", config.gps_offset_y);
+    }
+
+    // load rddf
+    ROS_INFO("loading rddf..");
+    string rddf_path = ros::package::getPath("stier") + "/paths/" + rddf_name;
+    if(rddf.load(rddf_path) == 0) {
+        ROS_INFO("-- rddf name : %s", rddf.getFilePath().c_str());
+        ROS_INFO("-- rddf count : %d", rddf.getCount());
+        //rddf.printData();
+    }
+    else {
+        ROS_WARN("-- rddf loading failed");
+        ROS_WARN("-- terminating main function");
+        ros::shutdown();
+    }
+    
+    // check if the car is on start point of rddf
+    ROS_INFO("check if the car is on start point of rddf..");
+    bool on_start_point = false;
+    double dist_pow;
+    while(!on_start_point) {
+        ros::spinOnce();
+        dist_pow = rddf.calculateDistancePowFromIdx(car.x, car.y, 0);
+        if (dist_pow < 9.0) {
+            ROS_INFO("-- the car is on the start point! (dist = %f)", sqrt(dist_pow));
+            on_start_point = true;
+        }
+        else {
+            ROS_WARN("-- not on the start point (dist = %f)", sqrt(dist_pow));
+            ros::Duration(2.0).sleep();
+        }
+    }
+
+    // start logging
+    startLogging();
+
+    // count down
+    int countdown = 5;
+    ROS_INFO("the car is ready! wait for %d seconds..", countdown);
+    for ( int i=countdown; i>0; i--) {
+        ROS_INFO("-- %d", i);
+        ros::Duration(1.0).sleep();
+    }
+    
+    ROS_INFO("control loop will start now!"); 
+    while (ros::ok()) {
+        
+        erp42_msgs::ModeCmd mode_msg;
+        mode_msg.MorA = 0x01;
+        //mode_msg.EStop = 0x00;
+        mode_pub.publish(mode_msg);
+
+        ros::spinOnce();
+
+
+        car.idx_current = rddf.calculateNearestIdx(car.x, car.y);
+        SectionType section = get_section_from_rddf_idx(car.idx_current);
+        if (section_fix != -1) {
+            section = static_cast<SectionType>(section_fix);
+        }
+        
+        erp42_msgs::DriveCmd drive_cmd;
+        switch (section) {
+            case SectionType::GPS_NAVIGATION:
+                drive_cmd = update_drive_cmd_gps_navigation();
+                ROS_INFO("car.x:%12.4f | car.y:%12.4f | section:%02d | idx:%4d/%4d",
+                    car.x, car.y, (int)section, car.idx_current, rddf.getMaxIdx());
+                ROS_INFO("drive_cmd.KPH:%2d | drive_cmd.Deg:%3d | feedback_steer:%3d",
+                    drive_cmd.KPH, drive_cmd.Deg, car.feedback_steer);
+                ROS_INFO("------------------------------------------");
+                break;
+            case SectionType::LANE_FOLLOWING:
+                drive_cmd.KPH = vision_cmd.speed;
+                drive_cmd.Deg = vision_cmd.steer;
+                ROS_INFO("drive_cmd.KPH:%2d | drive_cmd.Deg:%3d | section:%02d",
+                    drive_cmd.KPH, drive_cmd.Deg, (int)section);
+                ROS_INFO("------------------------------------------");
+                break;
+            case SectionType::LIDAR_ONLY:
+                drive_cmd.KPH = lidar_cmd.speed;
+                drive_cmd.Deg = lidar_cmd.steer;
+                ROS_INFO("drive_cmd.KPH:%2d | drive_cmd.Deg:%3d | section:%02d",
+                    drive_cmd.KPH, drive_cmd.Deg, (int)section);
+                ROS_INFO("------------------------------------------");
+                break;
+            case SectionType::TUNNEL:
+                drive_cmd.KPH = lidar_cmd.speed;
+                drive_cmd.Deg = lidar_cmd.steer;
+                ROS_INFO("drive_cmd.KPH:%2d | drive_cmd.Deg:%3d | section:%02d",
+                    drive_cmd.KPH, drive_cmd.Deg, (int)section);
+                ROS_INFO("------------------------------------------");
+                break;
+            default:
+                //stop vehicle
+                drive_cmd.KPH = 0;
+                drive_cmd.Deg = 0;
+                break;
+        }
+        car.cmd_steer = drive_cmd.KPH;
+        car.cmd_steer = drive_cmd.Deg;
+        drive_pub.publish(drive_cmd);
+
+        std_msgs::Int32 section_msg;
+        section_msg.data = (int)section;
+        section_pub.publish(section_msg);
+
+        std_msgs::Float32 speed_msg;
+        speed_msg.data = car.gps_speed;
+        speed_pub.publish(speed_msg);
+
+        std_msgs::Int32 current_idx_msg;
+        current_idx_msg.data = car.idx_current;
+        current_idx_pub.publish(current_idx_msg);
+
+        updateLogging();
+        loop_rate.sleep();
+    }
+
+    finishLogging();
+    return 0;
+}
+
+
+
+//cout<<" cog="<<cog;
+/*
+float heading_rad = cog;
+float delta = car.feedback_steer * PI_ / 180.0;
+float kappa = tan(delta) / car.wheelbase; 
+float cog_temp = atan2(sin(heading_rad) + car.wheelbase * kappa * cos(heading_rad),
+    cos(heading_rad) - car.wheelbase * kappa * sin(heading_rad));
+if (cog > PI_ && cog <= 2 * PI_) cog_temp += 2 * PI_;
+car.heading = cog_temp;
+*/
+//cout<<" car.heading="<<car.heading;
+//cout<<endl;

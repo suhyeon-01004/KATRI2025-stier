@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rddf_recorder</name>
+  <version>0.0.1</version>
+  <description>gps launch for stier car</description>
+  <maintainer email="ubuntu@todo.todo">mannykim</maintainer>
+  <license>MOLA</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <depend>roslib</depend>
+  <!-- build_depend : 이 패키지를 컴파일 할 때 필요한 다른 패키지 목록 -->
+  <build_depend>roscpp</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <!-- build_export_depend : 이 패키지를 참조하는 경우 필요한 패키지 목록 -->
+  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>geometry_msgs</build_export_depend>
+  <!-- exec_depend : 이 패키지를 실행할 때 필요한 패키지 목록 -->
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>utm_lla</exec_depend>
+</package>

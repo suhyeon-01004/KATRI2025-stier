@@ -1,0 +1,31 @@
+<launch>
+  <!-- GPS 센서 프레임을 base_link 자식으로 고정 -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="gps_to_base"
+        args="0.0 0.0 0.0 0 0 0 base_link gps" />
+
+  <!-- navsat_transform_node -->
+  <node pkg="robot_localization" type="navsat_transform_node" name="navsat_transform" output="screen">
+
+    <!-- 2D 이동만 (z, roll, pitch 무시) -->
+    <param name="two_d_mode" value="true"/>
+    <!-- 고도는 0으로 보정 -->
+    <param name="zero_altitude" value="true"/>
+
+
+    <!-- yaw는 odom(EKF1) 대신 GPS velocity에서 계산 -->
+    <param name="use_odometry_yaw" value="false"/>
+
+    <param name="map_frame" value="map"/>
+
+    <!-- UTM 변환 TF 퍼블리시 (Noetic에서는 이 이름 사용) -->
+    <param name="broadcast_cartesian_transform" value="true"/>
+    <param name="broadcast_cartesian_transform_as_parent_frame" value="true"/>
+
+    <!-- 입력 remap -->
+    <remap from="gps/fix" to="/ublox_position_receiver/fix"/>
+    <remap from="imu/data" to="/imu/data_navpvt_heading"/>
+
+    <!-- navsat 출력 -->
+    <remap from="odometry/gps" to="/odometry/gps"/>
+  </node>
+</launch>

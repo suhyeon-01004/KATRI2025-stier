@@ -1,0 +1,18 @@
+<launch>
+
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/stier/catkin_ws/src/control/stier/rviz/2025_semi.rviz" output="screen" />
+  <!-- 컨트롤 -->
+  <include file="$(find stier)/launch/pp_lidar_vision.launch" />
+  <!-- 차선 -->
+  <node name="detect_lane" pkg="recognition" type="detect_lane.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <node name="lane_control" pkg="mission" type="lane_control.py" args="--section" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <!-- 라이다 -->
+  <node name="object_detector" pkg="object_detector" type="object_detector" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <node name="pure_pursuit_lidar" pkg="lidar" type="pure_pursuit_lidar.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <!-- 미션 -->
+  <node name="parking_semi_lane" pkg="mission" type="parking_semi_lane.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <node name="uturn_final" pkg="mission" type="uturn_final.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <node name="avoid_moving" pkg="mission" type="avoid_moving.py" args="--section" output="screen" respawn="true" launch-prefix="xterm -e" />
+  <node name="avoid_static_offset" pkg="mission" type="avoid_static_offset.py" output="screen" respawn="true" launch-prefix="xterm -e" />
+</launch>
+

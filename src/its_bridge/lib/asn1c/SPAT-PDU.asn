@@ -1,0 +1,58 @@
+SPAT DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+-- 메시지 최상위 구조
+Message ::= SEQUENCE {
+    messageId    INTEGER,
+    value        MessageValue
+}
+
+MessageValue ::= SEQUENCE {
+    timeStamp    INTEGER OPTIONAL,
+    name         UTF8String,
+    intersections SEQUENCE OF IntersectionState
+}
+
+-- 교차로 정보
+IntersectionState ::= SEQUENCE {
+    name        UTF8String OPTIONAL,
+    id          IntersectionID,
+    revision    INTEGER,
+    status      UTF8String,
+    states      SEQUENCE OF MovementState
+}
+
+IntersectionID ::= SEQUENCE {
+    region      INTEGER,
+    id          INTEGER
+}
+
+-- 신호 상태
+MovementState ::= SEQUENCE {
+    movementName      UTF8String,          -- STR, LEFT, S, L, R 등
+    signalGroup       INTEGER,             -- 1 ~ 16
+    state-time-speed  SEQUENCE OF MovementEvent
+}
+
+-- 이벤트 정보
+MovementEvent ::= SEQUENCE {
+    eventState   ENUMERATED {
+                     unavailable                (0),
+                     dark                       (1),
+                     stop-Then-Proceed          (2),
+                     stop-And-Remain            (3),
+                     pre-Movement               (4),
+                     permissive-Movement-Allowed(5),
+                     protected-Movement-Allowed (6),
+                     permissive-clearance       (7),
+                     protected-clearance        (8)
+                 },
+    timing       TimeChangeDetails
+}
+
+-- 타이밍 정보
+TimeChangeDetails ::= SEQUENCE {
+    minEndTime   INTEGER OPTIONAL
+}
+
+END
+

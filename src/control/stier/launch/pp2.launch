@@ -1,0 +1,14 @@
+<launch>
+    <!-- 파라미터 설정 -->
+    <arg name = "rddf" type="string" default="filtered_2025-2-19_20-49_rddf-bb-01.txt" />
+    <arg name="ld" type="double" default="1.0" />
+    <arf name="speed" type="double" default="5.0" />
+    
+    
+    <!-- rosrun stier pp 실행 -->
+    <node pkg="stier" type="pp" name="pp_node" output="screen">
+    	<param name="rddf" type="string" value="$(arg rddf)" />
+	<param name="ld" type="double" value="$(arg ld)" />
+	<param name="speed" type="double" value="$(arg speed)" />
+    </node>
+</launch>

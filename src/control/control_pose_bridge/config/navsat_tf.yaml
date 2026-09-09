@@ -1,0 +1,11 @@
+frequency: 30
+publish_tf: false
+broadcast_utm_transform: false
+delay: 0.0
+
+magnetic_declination_radians: 0.0
+yaw_offset: 0.0
+zero_altitude: true
+
+base_link_frame: base_link
+world_frame: utm

@@ -1,0 +1,27 @@
+# ROS / generated artifacts
+build/
+devel/
+install/
+logs/
+.catkin_tools/
+__pycache__/
+*.pyc
+*.pyo
+*.o
+*.a
+*.so
+*.so.*
+.libs/
+.deps/
+*.lo
+*.la
+*.zip
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+# Historical runtime logs (route files under paths/ remain included)
+src/control/stier/log/

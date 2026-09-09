@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--FOR STATIC AVOIDANCE PATH & RECORDING-->
+<launch>
+    
+    <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
+
+    <!-- PATH MAKER -->
+    <!-- <include file="$(find erp_ros)/launch/path_maker_one_lap_morai.launch"/> -->
+
+    <!-- LiDAR -->
+    <node pkg="object_detector" type="object_detector" name="object_detector" output="screen"/>
+    <node pkg="static" type="avoid.py" name="avoid" output = 'screen'/>
+    <node pkg="lidar" type="pure_pursuit.py" name="control_in_lidar" />
+
+    <!-- VISUALIZAITON -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find lidar)/rviz/static_avoid.rviz" />
+
+    <!-- ROSBAG RECORD-->
+    <!--IN SMK-->
+    <!--<node pkg="rosbag" type="record" name="rosbag_record" args="-o /home/smk/catkin_ws/src/lidar/lidar/bag/static_bag/ /velodyne_points /object_info /cluster /path_marker /object_marker /goal_marker /target_point"/>
+-->
+    <!--IN STIER-->
+    <node pkg="rosbag" type="record" name="rosbag_record" args="-o /home/stier/catkin_ws/src/lidar/lidar/bag/static_bag/ /velodyne_points /scan /object_info /cluster /path_marker /object_marker /goal_marker utm /ublox_msgs/NavPVT /target_point"/>
+
+    <!--CONTROL-->
+    <!--<node pkg="lidar" type="pure_pursuit.py" name="ctl_in_lidar" />
+-->
+</launch>

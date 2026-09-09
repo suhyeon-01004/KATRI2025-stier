@@ -1,0 +1,7 @@
+<launch>
+    <node pkg="stier" type="cmd_test.py" name="cmd_test_node" output="screen">
+        <param name="speed" value="5"/>
+        <param name="steer" value="0"/>
+        <param name="duration" value="15.0"/>
+    </node>
+</launch>

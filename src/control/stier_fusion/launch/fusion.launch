@@ -1,0 +1,4 @@
+<launch>
+  <!-- fusion_node 실행 -->
+  <node pkg="stier_fusion" type="fusion_node" name="fusion_node" output="screen"/>
+</launch>

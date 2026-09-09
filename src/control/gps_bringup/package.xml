@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>gps_bringup</name>
+  <version>0.0.1</version>
+  <description>gps launch for stier car</description>
+  <maintainer email="ubuntu@todo.todo">mannykim</maintainer>
+  <license>MOLA</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <!-- build_depend : 이 패키지를 컴파일 할 때 필요한 다른 패키지 목록 -->
+
+  <!-- build_export_depend : 이 패키지를 참조하는 경우 필요한 패키지 목록 -->
+ 
+  <!-- exec_depend : 이 패키지를 실행할 때 필요한 패키지 목록 -->
+  <exec_depend>utm_lla</exec_depend>
+  <exec_depend>ublox_utils</exec_depend>
+</package>

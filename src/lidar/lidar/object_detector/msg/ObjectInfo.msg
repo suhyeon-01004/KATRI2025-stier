@@ -1,0 +1,15 @@
+int32 objectCounts
+float64[100] centerX
+float64[100] centerY
+float64[100] centerZ
+float64[100] lengthX
+float64[100] lengthY
+float64[100] lengthZ
+float64[100] minX
+float64[100] minY
+float64[100] minZ
+float64[100] maxX
+float64[100] maxY
+float64[100] maxZ
+int64[100] pixelX
+int64[100] pixelY

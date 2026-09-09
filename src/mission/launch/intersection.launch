@@ -1,0 +1,13 @@
+<launch>
+
+
+  <node name="vi" pkg="stier" type="vi" output="screen" respawn="true" launch-prefix="xterm -e"/> 
+  <node name="pp_test" pkg="stier" type="pp_test" output="screen" respawn="true" launch-prefix="xterm -e" />
+  
+  <node name="detect_lane" pkg="recognition" type="detect_lane.py" output="screen" respawn="true" />
+  
+  <node name="stop_line" pkg="recognition" type="stop_line.py" output="screen" respawn="true" launch-prefix="xterm -e"/>
+  <node name="traffic_light" pkg="recognition" type="traffic_light.py" output="screen" respawn="true" launch-prefix="xterm -e"/>
+  
+  
+</launch>

@@ -1,0 +1,25 @@
+<launch>
+    <!-- UTM 변환 관련 파라미터 -->
+    <arg name="utm_zone" default="52" />
+    <arg name="hemisphere" default="North" />
+
+    <!-- GPS 수신 노드 -->
+    <!-- <node pkg="ublox_gps" type="ublox_gps" name="ublox_position_receiver" output="screen">
+        <param name="device" value="/dev/ttyACM0" />
+        <rosparam command="load" file="$(find ublox_utils)/config/zed_f9p.yaml" />
+    </node> -->
+
+    <!-- IMU 노드 -->
+    <!-- <node pkg="xsens_mti_driver" type="xsens_mti_node" name="xsens_mti_node" output="screen">
+        <param name="device" value="/dev/ttyUSB0" />
+    </node> -->
+
+    <!-- GPS + IMU Fusion 노드 -->
+    <node pkg="xsens" type="gps_imu_fusion" name="gps_imu_fusion" output="screen">
+        <param name="utm_zone" value="$(arg utm_zone)" />
+        <param name="hemisphere" value="$(arg hemisphere)" />
+    </node>
+
+    <!-- 시각화 -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find xsens)/rviz/gps_imu_fusion.rviz" />
+</launch>

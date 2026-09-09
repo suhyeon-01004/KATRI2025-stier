@@ -1,0 +1,20 @@
+<launch>
+  <!-- 경로/출력 토픽을 바꾸고 싶으면 arg로 조정 -->
+  <arg name="config" default="$(find stier_localization)/config/ekf_global.yaml"/>
+  <arg name="output_odom_topic" default="/odometry/global"/>
+
+  <!-- Global EKF (world_frame: utm) -->
+  <node pkg="robot_localization"
+        type="ekf_localization_node"
+        name="ekf_global"
+        output="screen"
+        clear_params="true">
+
+    <!-- ekf_global.yaml 로드 (여기에 world_frame: utm, gps0: odometry/gps 등 포함) -->
+    <rosparam command="load" file="$(arg config)"/>
+
+    <!-- EKF 출력 오도메트리를 /odometry/global 로 사용 -->
+    <remap from="odometry/filtered" to="$(arg output_odom_topic)"/>
+    <!-- 입력 센서 토픽은 ekf_global.yaml에 명시된 이름(예: gps0: odometry/gps)을 그대로 사용 -->
+  </node>
+</launch>

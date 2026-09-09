@@ -1,0 +1,19 @@
+<launch>
+    <!-- Launch object_detector -->
+    <node pkg="object_detector" type="object_detector" name="object_detector_node" output="screen" respawn="true"/>
+
+    <!-- Launch dense_lite.py -->
+    <node pkg="mission" type="dense_lite.py" name="dense_lite_node" output="screen" respawn="true"/>
+
+    <!-- Launch s_line.py -->
+    <node pkg="mission" type="s_line.py" name="s_line_node" output="screen" respawn="true"/>
+
+    <!-- Launch tunnel.py -->
+    <node pkg="mission" type="tunnel.py" name="tunnel_node" output="screen" respawn="true"/>
+
+    <!-- Launch avoid_fmtc.py -->
+    <node pkg="mission" type="avoid_fmtc.py" name="avoid_fmtc_node" output="screen" respawn="true"/>
+
+    <!-- Launch pure_pursuit_fmtc.py -->
+    <node pkg="lidar" type="pure_pursuit_fmtc.py" name="pure_pursuit_fmtc_node" output="screen" respawn="true"/>
+</launch>
